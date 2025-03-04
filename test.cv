@@ -1,1 +1,5 @@
-fn fortnite(this: int= 23049234)
+merge "../moduletest.cv" as test;
+fn fortnite(that: int= 234, that: int) -> int {
+    return this + that;
+}
+var x: int = 12322;

@@ -6,16 +6,30 @@
 
 inline ErrInfo errInfo;
 
+inline std::map<int, std::string> unfilteredLines;
+
+inline void set_unfilteredLines(const std::map<int, std::string>& lines) {
+    unfilteredLines = lines;
+}
+
 #define SET_ERRINFO(TYPE, EXP_TOKEN) \
     do { \
-    errInfo = { TYPE, tokens[pos].line, tokens[pos].column, tokens[pos].value, EXP_TOKEN }; \
+    errInfo = { TYPE, tokens[pos].line, tokens[pos].column, unfilteredLines[tokens[pos].line], EXP_TOKEN }; \
     error::gen(errInfo); \
     } while (0)
+
+using SymbolInfo = std::variant<struct Variable, struct Function, struct Namespace>;
+
+struct Namespace {
+    std::string identifier; // Name of the namespace.
+    std::map<std::string, SymbolInfo> symbols; // Variables and functions declared in the namespace.
+};
 
 struct Variable {
     std::string identifier; // Name of the variable.
     std::string type; // Type of the variable. Can be a primitive type or a user-defined type.
     std::string value; // Value of the variable. Can be an integer, float, or a string.
+    std::string scopeLevel; // Name of its parent function/namespace (global if in global scope).
 };
 
 struct Function {
@@ -24,9 +38,10 @@ struct Function {
     std::vector<std::string> parameters; // List of parameter types.
     std::vector<Variable> localVariables; // Variables declared in the function.
     std::string scopeLevel; // Name of its parent function/namespace (global if in global scope).
+    std::vector<Token> body; // List of tokens that make up the function body.
 };
 
-using SymbolInfo = std::variant<Variable, Function>;
+
 
 namespace keyword {
     inline void _pfn(int &pos, const std::vector<Token> &tokens) {
@@ -155,6 +170,22 @@ namespace keyword {
             return;
         }
         SET_ERRINFO(ErrorType::EXPECTED_KEYWORD, "bool");
+    }
+
+    inline void _pmerge(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "merge") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_KEYWORD, "merge");
+    }
+
+    inline void _pas(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "as") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_KEYWORD, "as");
     }
 }
 
@@ -286,6 +317,30 @@ namespace symbol {
         }
         SET_ERRINFO(ErrorType::EXPECTED_SYMBOL, "\"");
     }
+
+    inline void _pplus(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "+") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_SYMBOL, "+");
+    }
+
+    inline void _pminus(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "-") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_SYMBOL, "-");
+    }
+
+    inline void _parrow(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "->") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_SYMBOL, "->");
+    }
 }
 
 namespace ascii {
@@ -298,16 +353,18 @@ namespace ascii {
             }
 
         // Prepare and trigger an error for invalid input
-        SET_ERRINFO(ErrorType::EXPECTED_IDENTIFIER, "valid identifier");
+        SET_ERRINFO(ErrorType::EXPECTED_IDENTIFIER, "VALID IDENTIFIER");
         return "";
     }
 }
 
 namespace combinators {
+
 }
 
 namespace abstract {
 
+    // Add expression parsing functions here
     inline std::string _value(int &pos, const std::vector<Token> &tokens, const std::string& type) {
         if (type == "int") {
             if (std::ranges::all_of(tokens[pos].value, [](const char c) {
@@ -336,15 +393,14 @@ namespace abstract {
         return "";
     }
 
-    inline std::string _isType(const std::string &str, const std::vector<std::string>& types, int &pos) {
+    inline std::string _isType(const std::string &str, const std::vector<std::string>& types, int &pos,const std::vector<Token> &tokens) {
         if (const auto it = std::ranges::find(types, str); it != types.end()) {
             ++pos;
             return *it; // Return the matching type
         }
 
         // Prepare and trigger an error for invalid input
-        errInfo = {ErrorType::INVALID_TYPE, 0, 0, str};
-        error::gen(errInfo);
+        SET_ERRINFO(ErrorType::INVALID_TYPE, "VALID TYPE");
 
         // Return an empty or fallback string if invalid
         return "";
@@ -353,7 +409,7 @@ namespace abstract {
     inline std::tuple<std::string, std::string, std::optional<std::string>> _parg(int &pos, const std::vector<Token> &tokens, const std::vector<std::string>& types) {
         std::string name = ascii::_aname(pos, tokens);
         symbol::_pcolon(pos, tokens);
-        std::string type = _isType(tokens[pos].value, types, pos);
+        std::string type = _isType(tokens[pos].value, types, pos, tokens);
         if (tokens[pos].value == "=") {
             symbol::_peq(pos, tokens);
             std::string value = _value(pos, tokens, type);
@@ -374,7 +430,7 @@ namespace abstract {
         auto [name, type, value] = _parg(pos, tokens, types);
 
         std::get<Function>(symbolTable[parentFunction]).parameters.push_back(type);
-        std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("none")});
+        std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("None")});
 
         // Continue matching arguments until the closing parenthesis is found.
         while (tokens[pos].value != ")") {
@@ -386,7 +442,7 @@ namespace abstract {
                 // Then, match another argument.
                 auto [name, type, value] = _parg(pos, tokens, types);
                 std::get<Function>(symbolTable[parentFunction]).parameters.push_back(type);
-                std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("")});
+                std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("None")});
 
             } else {
                 // If the comma symbol is not found, then break the loop.
@@ -395,5 +451,23 @@ namespace abstract {
         }
 
         symbol::_pclose(pos, tokens);
+    }
+
+    inline std::string _pstring(int &pos, const std::vector<Token> &tokens) {
+        symbol::_pdoublequote PARGS;
+        std::string str;
+        while (tokens[pos].value != "\"" && tokens[pos - 1].value != "\\") {
+            str += tokens[pos++].value;
+        }
+        symbol::_pdoublequote PARGS;
+        return str;
+    }
+
+    inline std::string _pmodule(int &pos, const std::vector<Token> &tokens) {
+        std::string location = _pstring PARGS
+        if (!std::filesystem::exists(location)) {
+            SET_ERRINFO(ErrorType::FILE_NOT_FOUND, "VALID MODULE FILE PATH");
+        }
+        return location;
     }
 }

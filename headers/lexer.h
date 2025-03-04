@@ -25,7 +25,7 @@ struct Token {
 
 inline bool isKeyword(const std::string &str) {
     static const std::unordered_set<std::string> keywords = {
-        "if", "else", "while", "return", "fn", "var", "int", "float", "double", "char", "string", "bool", "void", "runtime", "static", "const"
+        "if", "else", "while", "return", "fn", "var", "int", "float", "double", "char", "string", "bool", "void", "runtime", "static", "const", "merge", "as"
     };
     return keywords.contains(str);
 }
@@ -36,7 +36,7 @@ public:
         : input(inputStream), lineNumber(1), currentPos(0)
     {
         symbols = {
-            "==", "!=", "<=", ">=",
+            "==", "!=", "<=", ">=", "->",
             "=", "+", "-", "*", "/", "(", ")", "{", "}", ";", ",", ":", "\""
         };
 
@@ -46,7 +46,7 @@ public:
                           });
     }
 
-    std::vector<Token> tokenize() {
+    std::tuple<std::vector<Token>, std::map<int, std::string>> tokenize() {
         std::vector<Token> tokens;
         std::string line;
 
@@ -80,12 +80,12 @@ public:
                 tokens.push_back({TokenType::UNKNOWN, std::string(1, currentChar), lineNumber, static_cast<int>(currentPos + 1)});
                 ++currentPos;
             }
-
+            this->unfilteredLines[lineNumber] = line;
             ++lineNumber;
         }
 
         tokens.push_back({TokenType::eof, "", lineNumber, 0});
-        return tokens;
+        return {tokens, this->unfilteredLines};
     }
 
 private:
@@ -93,6 +93,7 @@ private:
     std::string currentLine;
     std::size_t currentPos;
     int lineNumber;
+    std::map<int, std::string> unfilteredLines;
     std::vector<std::string> symbols;
 
     Token tokenizeNumber() {

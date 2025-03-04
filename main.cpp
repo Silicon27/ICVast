@@ -5,6 +5,18 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <csignal>
+#include <thread>
+#include <future>
+
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <csignal>
+#endif
+
+
 
 #define PARGS (pos, tokens);
 
@@ -38,6 +50,8 @@ void printTree(const std::vector<Token>& tokenizedList)
 
 int main(const int argc, char* argv[])
 {
+    std::signal(SIGSEGV, signalHandler);
+
     std::string input;
     for (size_t i = 1; i < argc; i++)
     {
@@ -50,9 +64,11 @@ int main(const int argc, char* argv[])
 
     auto lex = Lexer(file);
 
-    std::vector<Token> tokenizedOutput = lex.tokenize();
+    auto [tokenizedOutput, unfilteredLines] = lex.tokenize();
 
     printTree(tokenizedOutput);
+
+    set_unfilteredLines(unfilteredLines);
 
     Parser parser(tokenizedOutput);
     parser.parse();
