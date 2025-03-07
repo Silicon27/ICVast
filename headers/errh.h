@@ -61,6 +61,8 @@ enum class ErrorType {
     EXPECTED_OPERATOR = 2006,
     EXPECTED_STRING = 2007,
     EXPECTED_ONE_OF = 2008,
+    EXPECTED_VALID_EXPRESSION = 2009,
+    EXPECTED_ENV_VAR = 2010,
 
     // Runtime errors (3000-3010)
     OUT_OF_BOUNDS = 3000,
@@ -91,13 +93,14 @@ struct ErrInfo {
     int column = -1;
     std::string sourceLine;
     std::string expected;
+    std::string filePath;
 };
 
-inline constexpr std::string bold_red = "\033[1;31m";
-inline constexpr std::string cyan = "\033[0;36m";
-inline constexpr std::string green = "\033[0;32m";
-inline constexpr std::string yellow = "\033[0;33m";
-inline constexpr std::string reset = "\033[0m";
+inline std::string bold_red = "\033[1;31m";
+inline std::string cyan = "\033[0;36m";
+inline std::string green = "\033[0;32m";
+inline std::string yellow = "\033[0;33m";
+inline std::string reset = "\033[0m";
 
 namespace error {
     inline std::string format_expected(const std::string& expected) {
@@ -114,8 +117,7 @@ namespace error {
         int code = static_cast<int>(errInfo.errType);
 
         // Determine error category
-        if (code >= 1000 && code < 2000) category = "Syntax Error";
-        else if (code >= 2000 && code < 3000) category = "Syntax Error";
+        if (code >= 1000 && code < 3000) category = "Syntax Error";
         else if (code >= 3000 && code < 4000) category = "Runtime Error";
         else if (code >= 4000 && code < 5000) category = "File Error";
         else category = "Unknown Error";
@@ -140,6 +142,8 @@ namespace error {
             case ErrorType::EXPECTED_OPERATOR:             message = "Expected operator"; break;
             case ErrorType::EXPECTED_STRING:               message = "Expected string literal"; break;
             case ErrorType::EXPECTED_ONE_OF:               message = "Expected one of"; break;
+            case ErrorType::EXPECTED_VALID_EXPRESSION:     message = "Expected valid expression"; break;
+            case ErrorType::EXPECTED_ENV_VAR:              message = "Expected environment variable"; break;
 
             case ErrorType::OUT_OF_BOUNDS:                 message = "Out of bounds error"; break;
             case ErrorType::INVALID_TYPE:                  message = "Invalid type error"; break;
@@ -161,18 +165,17 @@ namespace error {
             default:                                       message = "Unknown error [Default Case]"; break;
         }
 
-
         // Error header
         std::cerr << bold_red << "➔ " << category << ": " << reset
                   << message << " " << cyan << "[" << code << "]" << reset << "\n";
 
-        // Location information
+        // Location information (updated to include filePath)
         std::cerr << cyan << "  ╰─▶ " << reset
-                  << "At line " << errInfo.line;
+                  << "In file '" << errInfo.filePath << "' at line " << errInfo.line;
         if (errInfo.column > 0) std::cerr << ":" << errInfo.column;
         std::cerr << "\n";
 
-        // Source code snippet
+        // Source code snippet (remains unchanged)
         if (!errInfo.sourceLine.empty()) {
             std::cerr << yellow << "   │ " << reset << errInfo.sourceLine << "\n";
             if (errInfo.column > 0 && errInfo.column <= static_cast<int>(errInfo.sourceLine.length())) {
@@ -181,7 +184,7 @@ namespace error {
             }
         }
 
-        // Expected information
+        // Expected information (remains unchanged)
         if (!errInfo.expected.empty()) {
             std::cerr << green << "   ➔ " << reset << bold_red << "Help: " << reset;
 

@@ -8,6 +8,11 @@
 #include <csignal>
 #include <thread>
 #include <future>
+#include <variant>
+#include <optional>
+#include <filesystem>
+#include <unordered_map>
+#include <cstdlib>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -18,7 +23,7 @@
 
 
 
-#define PARGS (pos, tokens);
+#define PARGS (pos, *tokens);
 
 #include "headers/lexer.h"
 #include "headers/parser.h"
@@ -66,11 +71,11 @@ int main(const int argc, char* argv[])
 
     auto [tokenizedOutput, unfilteredLines] = lex.tokenize();
 
-    printTree(tokenizedOutput);
+    // printTree(tokenizedOutput);
 
     set_unfilteredLines(unfilteredLines);
 
-    Parser parser(tokenizedOutput);
+    Parser parser(std::make_unique<std::vector<Token>>(tokenizedOutput), input);
     parser.parse();
     return 0;
 }

@@ -25,7 +25,9 @@ struct Token {
 
 inline bool isKeyword(const std::string &str) {
     static const std::unordered_set<std::string> keywords = {
-        "if", "else", "while", "return", "fn", "var", "int", "float", "double", "char", "string", "bool", "void", "runtime", "static", "const", "merge", "as"
+        "if", "else", "while", "return", "fn", "var", "int", "float", "double", "char",
+        "string", "bool", "void", "runtime", "static", "const", "merge", "as", "extern",
+        "stdlib"
     };
     return keywords.contains(str);
 }
@@ -36,8 +38,10 @@ public:
         : input(inputStream), lineNumber(1), currentPos(0)
     {
         symbols = {
-            "==", "!=", "<=", ">=", "->",
-            "=", "+", "-", "*", "/", "(", ")", "{", "}", ";", ",", ":", "\""
+            "\\\"", "\\\'", "\\\t", "\\\n", "\\\r", "\\\v", "\\\f", "\\\b", "\\\a",
+            "==", "!=", "<=", ">=", "->", "::",
+            "=", "+", "-", "*", "/", "(", ")", "{", "}", ";", ",", ":", "\"", "\'",
+            "\\", "@", "#", "$", "%", "&", "?", "!", "<", ">", "|", "^", "~"
         };
 
         std::ranges::sort(symbols,

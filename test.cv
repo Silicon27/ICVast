@@ -1,5 +1,15 @@
 merge "../moduletest.cv" as test;
+merge stdlib@"io" as std;
 fn fortnite(that: int= 234, that: int) -> int {
     return this + that;
 }
-var x: int = 12322;
+var x: string = "hello";
+
+fn y() -> void {
+    test::print("Hello, World!");
+}
+
+fortnite(x, 123);
+
+extern "writescr" (x);
+var z: int = 123;
