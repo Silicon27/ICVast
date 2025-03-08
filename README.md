@@ -8,21 +8,35 @@ Ironically the C stands for "Compiled", so I'm not certain as to how I came to t
 
 Due to my persistence in, well, being lazy, I will in the follow section provide a command for you to self compile the code (instead of providing them myself :>).
 
-> [!WARNING]\
+> [!WARNING] 
 > Prequisites required for compiling the code:
 > - g++ (optimally above g++-11) or any other C++ compiler that supports C++20
 > - git (for cloning the repository)
 
 ```bash
-cd ~/
 git clone https://github.com/Silicon27/ICVast.git
 cd ICVast
-
-# post-download operations
 chmod +x install.sh
-./install.sh
-g++ main.cpp -o InterpretedCVast -std=c++20
 ```
+
+Running the following command will automate the whole compilation process.
+```bash
+./install.sh
+```
+
+> [!NOTE]
+> **In the case `./install.sh` does not work**, you can attempt to manually compile the code and add the stdlib via:
+> ```bash
+> g++ main.cpp -o InterpretedCVast -std=c++20
+> ```
+> Adding the stdlib (**Bash**):
+> ```bash
+> echo 'export CVAST_STDLIB="$(pwd)/stdlib"' >> ~/.bashrc && source ~/.bashrc
+> ```
+>for  **Zsh**:
+> ```bash
+> echo 'export CVAST_STDLIB="$(pwd)/stdlib"' >> ~/.zshrc && source ~/.zshrc
+> ```
 
 ## Usage
 
@@ -30,6 +44,18 @@ The usage of the program is quite simple. You can run the program by providing t
 
 ```bash
 ./InterpretedCVast path/to/file.cv
+```
+
+Checking the version of the program is also quite simple. You can do so by providing the `-v` flag.
+
+```bash
+./InterpretedCVast -v
+```
+
+If your unsure of the commands, you can always check the help menu by providing the `-h` flag.
+
+```bash
+./InterpretedCVast -h
 ```
 
 ## Basic Syntax
