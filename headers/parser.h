@@ -136,6 +136,7 @@ public:
                 errInfo = { ErrorType::EXPECTED_ENV_VAR, (*tokens)[pos].line, (*tokens)[pos].column, unfilteredLines[(*tokens)[pos].line], "CVAST_STDLIB", currfilePath };
                 error::gen(errInfo);
             }
+            std::cout << "stdlib path: " << stdlibPath << std::endl;
             // check if is a directory (foulder) first, if not, add .cv and check again
             std::string fullPath = std::string(stdlibPath) + "/" + loc;
             if (!std::filesystem::is_directory(fullPath)) {

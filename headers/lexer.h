@@ -35,7 +35,7 @@ inline bool isKeyword(const std::string &str) {
 class Lexer {
 public:
     explicit Lexer(std::istream &inputStream)
-        : input(inputStream), lineNumber(1), currentPos(0)
+        : input(inputStream), currentPos(0), lineNumber(1)
     {
         symbols = {
             "\\\"", "\\\'", "\\\t", "\\\n", "\\\r", "\\\v", "\\\f", "\\\b", "\\\a",
