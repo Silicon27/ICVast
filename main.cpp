@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <cstdlib>
+#include <ranges>
 
 #if defined(_WIN32)
     #include <windows.h>

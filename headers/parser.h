@@ -209,7 +209,54 @@ public:
         }
         std::cout << std::endl;
 
+        // Validate function call parameter types
+        for (size_t i = 0; i < arguments.size(); i++) {
+            if (std::get<Function>(globalSymbolTable[name]).parameters[i] != arguments[i].type) {
+                errInfo = { ErrorType::INVALID_TYPE, (*tokens)[pos].line, (*tokens)[pos].column, unfilteredLines[(*tokens)[pos].line], "Valid type", currfilePath };
+                error::gen(errInfo);
+            }
+        }
 
+        // create a copy of the global symbol table and add the function arguments to it
+        std::unordered_map<std::string, SymbolInfo> localSymbolTable = globalSymbolTable;
+        for (const auto &arg : arguments) {
+            localSymbolTable[arg.identifier] = arg;
+        }
+
+        Parser parser(std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).body), filePath, name);
+        parser.set_globalSymbolTable(localSymbolTable);
+        parser.parse();
+    }
+
+    void parseScopedFunctionCall(int &pos, const Function& func) {
+        const std::string name = ascii::_aname PARGS // Function name
+        const std::vector<Variable> arguments = abstract::_pcall_params(pos, *tokens, globalSymbolTable);
+
+        // Validate function call parameter types
+        for (size_t i = 0; i < arguments.size(); i++) {
+            if (func.parameters[i] != arguments[i].type) {
+                errInfo = { ErrorType::INVALID_TYPE, (*tokens)[pos].line, (*tokens)[pos].column, unfilteredLines[(*tokens)[pos].line], "Valid type", currfilePath };
+                error::gen(errInfo);
+            }
+        }
+
+        std::unordered_map<std::string, SymbolInfo> localSymbolTable = globalSymbolTable;
+        for (size_t i = 0; i < arguments.size(); i++) {
+            localSymbolTable[func.localVariables[i].identifier] = arguments[i];
+        }
+
+        Parser parser(std::make_unique<std::vector<Token>>(func.body), filePath, name);
+        parser.set_globalSymbolTable(localSymbolTable);
+        parser.parse();
+    }
+
+    void scope_resolve(int &pos) {
+        std::variant<Variable, Function> result = abstract::_pscope_resolve(pos, *tokens, globalSymbolTable);
+        if (std::holds_alternative<Variable>(result)) {
+            std::cout << "Variable found" << std::endl;
+        } else if (std::holds_alternative<Function>(result)) {
+            parseScopedFunctionCall(pos, std::get<Function>(result));
+        }
     }
 
     void parse() {
@@ -241,6 +288,7 @@ public:
                     } else if (std::holds_alternative<Namespace>(it->second)) {
                         // Namespace
                         std::cout << "Namespace found" << std::endl;
+                        scope_resolve(currentToken);
                     }
                 }
             }
@@ -253,5 +301,9 @@ public:
 
     [[nodiscard]] std::unordered_map<std::string, SymbolInfo> getSymbolTable() {
         return globalSymbolTable;
+    }
+
+    void set_globalSymbolTable(const std::unordered_map<std::string, SymbolInfo>& symbolTable) {
+        globalSymbolTable = symbolTable;
     }
 };

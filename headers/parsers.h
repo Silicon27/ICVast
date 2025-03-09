@@ -771,4 +771,24 @@ namespace abstract {
         }
         return location;
     }
+
+    inline std::variant<Variable, Function> _pscope_resolve(int &pos, const std::vector<Token> &tokens, std::unordered_map<std::string, SymbolInfo>& symbolTable) {
+        std::unordered_map<std::string, SymbolInfo> currentSymbolTable = std::get<Namespace>(symbolTable[tokens[pos].value]).symbols;
+        ++pos;
+        while (true) {
+            if (tokens[pos].type == TokenType::SYMBOL && tokens[pos].value == "::") {
+                pos++;
+                continue;
+            } else if (std::holds_alternative<Namespace>(currentSymbolTable[tokens[pos].value])) {
+                currentSymbolTable = std::get<Namespace>(currentSymbolTable[tokens[pos].value]).symbols;
+                ++pos;
+            } else if (std::holds_alternative<Variable>(currentSymbolTable[tokens[pos].value])) {
+                return std::get<Variable>(currentSymbolTable[tokens[pos].value]);
+            } else if (std::holds_alternative<Function>(currentSymbolTable[tokens[pos].value])) {
+                return std::get<Function>(currentSymbolTable[tokens[pos].value]);
+            } else {
+                SET_ERRINFO(ErrorType::EXPECTED_IDENTIFIER, "VALID IDENTIFIER");
+            }
+        }
+    }
 }
