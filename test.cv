@@ -1,4 +1,4 @@
-merge "../moduletest.cv" as test;
+merge "moduletest.cv" as test;
 merge stdlib@"io" as std;
 fn fortnite(that: int= 234, that: int) -> int {
     return this + that;
