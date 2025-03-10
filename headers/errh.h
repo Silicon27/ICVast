@@ -73,9 +73,12 @@ enum class ErrorType {
     INVALID_STATE = 3005,
     INVALID_ARGUMENT = 3006,
     INVALID_RETURN = 3007,
-    DIVISION_BY_ZERO = 3008,
-    NULL_POINTER = 3009,
-    STACK_OVERFLOW = 3010,
+    INVALID_CHAR = 3008,
+    DIVISION_BY_ZERO = 3009,
+    NULL_POINTER = 3010,
+    STACK_OVERFLOW = 3011,
+    INVALID_BOOL = 3012,
+    INVALID_TYPE_CAST = 3013,
 
     // File system errors (4000-4002)
     FILE_NOT_FOUND = 4000,
@@ -153,9 +156,12 @@ namespace error {
             case ErrorType::INVALID_STATE:                 message = "Invalid state error"; break;
             case ErrorType::INVALID_ARGUMENT:              message = "Invalid argument error"; break;
             case ErrorType::INVALID_RETURN:                message = "Invalid return error"; break;
+            case ErrorType::INVALID_CHAR:                  message = "Invalid character error"; break;
             case ErrorType::DIVISION_BY_ZERO:              message = "Division by zero error"; break;
             case ErrorType::NULL_POINTER:                  message = "Null pointer error"; break;
             case ErrorType::STACK_OVERFLOW:                message = "Stack overflow error"; break;
+            case ErrorType::INVALID_BOOL:                  message = "Invalid boolean error"; break;
+            case ErrorType::INVALID_TYPE_CAST:             message = "Invalid type cast error"; break;
 
             case ErrorType::FILE_NOT_FOUND:                message = "File not found error"; break;
             case ErrorType::PERMISSION_DENIED:             message = "Permission denied error"; break;

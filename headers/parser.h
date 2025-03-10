@@ -26,7 +26,7 @@ private:
     int currentToken;
     std::unordered_map<std::string, SymbolInfo> globalSymbolTable;
     std::string scope;
-    std::vector<std::string> types = {"int", "float", "double", "char", "string", "bool", "void"};
+    std::vector<std::string> types = {"int", "float", "double", "char", "string", "bool", "void", "any"};
     std::string filePath;
 
 public:
@@ -211,7 +211,7 @@ public:
 
         // Validate function call parameter types
         for (size_t i = 0; i < arguments.size(); i++) {
-            if (std::get<Function>(globalSymbolTable[name]).parameters[i] != arguments[i].type) {
+            if (std::get<Function>(globalSymbolTable[name]).parameters[i] != arguments[i].type && std::get<Function>(globalSymbolTable[name]).parameters[i] != "any") {
                 errInfo = { ErrorType::INVALID_TYPE, (*tokens)[pos].line, (*tokens)[pos].column, unfilteredLines[(*tokens)[pos].line], "Valid type", currfilePath };
                 error::gen(errInfo);
             }
@@ -234,7 +234,7 @@ public:
 
         // Validate function call parameter types
         for (size_t i = 0; i < arguments.size(); i++) {
-            if (func.parameters[i] != arguments[i].type) {
+            if (func.parameters[i] != arguments[i].type && func.parameters[i] != "any") {
                 errInfo = { ErrorType::INVALID_TYPE, (*tokens)[pos].line, (*tokens)[pos].column, unfilteredLines[(*tokens)[pos].line], "Valid type", currfilePath };
                 error::gen(errInfo);
             }

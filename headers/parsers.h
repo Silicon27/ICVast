@@ -639,6 +639,23 @@ namespace abstract {
             }
             symbol::_pdoublequote (pos, tokens);
             return str;
+        } else if (type == "char") {
+            symbol::_pquote (pos, tokens);
+            std::string c = tokens[pos++].value;
+            if (c.size() != 1) {
+                SET_ERRINFO(ErrorType::INVALID_CHAR, "CHARACTER");
+            }
+
+            symbol::_pquote (pos, tokens);
+            return c;
+        } else if (type == "bool") {
+            if (tokens[pos].value == "true" || tokens[pos].value == "false") {
+                return tokens[pos++].value;
+            } else {
+                SET_ERRINFO(ErrorType::INVALID_BOOL, "BOOLEAN");
+            }
+        } else if (type == "any") {
+            return tokens[pos++].value;
         }
         return "";
     }
