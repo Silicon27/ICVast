@@ -3,7 +3,6 @@
 //
 
 #pragma once
-#include "parser.h"
 
 inline ErrInfo errInfo;
 
@@ -46,6 +45,111 @@ struct Function {
     std::vector<Variable> localVariables; // Variables declared in the function.
     std::string scopeLevel; // Name of its parent function/namespace (global if in global scope).
     std::vector<Token> body; // List of tokens that make up the function body.
+    std::vector<Token> unfilteredBody; // List of unfiltered tokens that make up the function body.
+};
+
+class RecursiveDescentParser {
+private:
+    size_t currentToken = 0;
+    std::vector<Token> input;
+    std::unordered_map<std::string, SymbolInfo> symbolTable;
+
+    double expr() {
+        double result = term();
+        while (currentToken < input.size() && (input[currentToken].value == "+" || input[currentToken].value == "-")) {
+            if (input[currentToken].value == "+") {
+                currentToken++;
+                result += term();
+            } else {
+                currentToken++;
+                result -= term();
+            }
+        }
+        return result;
+    }
+
+    double term() {
+        double result = factor();
+        while (currentToken < input.size() && (input[currentToken].value == "*" || input[currentToken].value == "/")) {
+            if (input[currentToken].value == "*") {
+                currentToken++;
+                result *= factor();
+            } else {
+                currentToken++;
+                double divisor = factor();
+                if (divisor == 0) {
+                    Token opToken = input[currentToken-1];
+                    throw std::runtime_error("Division by zero at line " +
+                        std::to_string(opToken.line) + ":" +
+                        std::to_string(opToken.column));
+                }
+                result /= divisor;
+            }
+        }
+        return result;
+    }
+
+    double factor() {
+        if (currentToken >= input.size()) {
+            throw std::runtime_error("Unexpected end of input");
+        }
+
+        if (input[currentToken].type == TokenType::NUMBER) {
+            double value = std::stod(input[currentToken].value);
+            currentToken++;
+            return value;
+        } else if (input[currentToken].value == "(") {
+            currentToken++;
+            double result = expr();
+            if (currentToken >= input.size() || input[currentToken].value != ")") {
+                throw std::runtime_error("Expected ')'");
+            }
+            currentToken++;
+            return result;
+        } else if (symbolTable.contains(input[currentToken].value)) {
+            SymbolInfo info = symbolTable[input[currentToken].value];
+            if (std::holds_alternative<Variable>(info)) {
+                auto var = std::get<Variable>(info);
+                currentToken++;
+                return std::stod(var.value);
+            } else {
+                throw std::runtime_error("Expected variable");
+            }
+
+        } else {
+            Token t = input[currentToken];
+            throw std::runtime_error("Unexpected token '" + t.value +
+                "' at line " + std::to_string(t.line) +
+                ":" + std::to_string(t.column));
+        }
+    }
+
+public:
+    explicit RecursiveDescentParser(std::vector<Token> input, std::unordered_map<std::string, SymbolInfo> symbolTable)
+        : input(std::move(input)), symbolTable(std::move(symbolTable)) {}
+
+    [[nodiscard]] std::string parse() {
+        try {
+            if (input.empty() || input[0].type == TokenType::eof) {
+                throw std::runtime_error("Empty input");
+            }
+
+            const double result = expr();
+
+            // Check if we've consumed all tokens except EOF
+            if (currentToken < input.size() - 1 ||
+               (currentToken < input.size() && input[currentToken].type != TokenType::eof)) {
+                Token extra = input[currentToken];
+                throw std::runtime_error("Unexpected token '" + extra.value +
+                    "' at line " + std::to_string(extra.line) +
+                    ":" + std::to_string(extra.column));
+            }
+
+            return std::to_string(result);
+        } catch (const std::exception& e) {
+            return "Error: " + std::string(e.what());
+        }
+    }
 };
 
 
@@ -219,6 +323,14 @@ namespace keyword {
             return;
         }
         SET_ERRINFO(ErrorType::EXPECTED_KEYWORD, "stdlib");
+    }
+
+    inline void _preturn(int &pos, const std::vector<Token> &tokens) {
+        if (tokens[pos].value == "return") {
+            ++pos;
+            return;
+        }
+        SET_ERRINFO(ErrorType::EXPECTED_KEYWORD, "return");
     }
 }
 
@@ -610,7 +722,8 @@ namespace abstract {
     }
 
     // Add expression parsing functions here
-    inline std::string _value(int &pos, const std::vector<Token> &tokens, const std::string& type) {
+    inline std::string _value(int &pos, const std::vector<Token> &tokens, const std::string& type, const std::vector<Token> &unfilteredTokens, std::unordered_map<std::string, SymbolInfo>& symbolTable) {
+        // TODO: add symbolTable as an argument
         if (type == "int") {
             if (std::ranges::all_of(tokens[pos].value, [](const char c) {
                 return std::isdigit(c);
@@ -618,14 +731,34 @@ namespace abstract {
                 return tokens[pos++].value;
             }
         } else if (type == "float") {
-            // Ensure the string is non-empty and contains at most one '.'
-            if (const std::string& val = tokens[pos].value; !val.empty() &&
-                                                            std::ranges::count(val, '.') <= 1 &&
-                                                            std::ranges::all_of(val, [](char c) { return std::isdigit(c) || c == '.'; }) &&
-                                                            (val.front() != '.' && val.back() != '.'))
-            {
-                return tokens[pos++].value;
+            const int start_pos = pos;  // Remember the starting position
+            std::string combined;
+
+            // Collect consecutive numeric tokens (digits or '.')
+            while (pos < tokens.size()) {
+                const std::string& token_val = tokens[pos].value;
+
+                // Check if token contains only digits or '.' and is non-empty
+                if (token_val.empty() ||
+                    !std::ranges::all_of(token_val, [](char c) {
+                        return std::isdigit(c) || c == '.';
+                    })) {
+                    break;
+                    }
+
+                combined += token_val;
+                pos++;
             }
+
+            // Validate the combined numeric string
+            if (!combined.empty() &&
+                std::ranges::count(combined, '.') <= 1 &&
+                std::ranges::any_of(combined, [](char c) { return std::isdigit(c); })) {
+                return combined;  // Return the valid combined float string
+                } else {
+                    pos = start_pos;  // Reset position if invalid
+                    return "";        // Return empty string to indicate failure
+                }
         } else if (type == "string") {
             symbol::_pdoublequote (pos, tokens);
             std::string str;
@@ -635,7 +768,7 @@ namespace abstract {
                     pos++;
                 }
                 else
-                    str += tokens[pos++].value;
+                    str += unfilteredTokens[pos++].value;
             }
             symbol::_pdoublequote (pos, tokens);
             return str;
@@ -655,7 +788,15 @@ namespace abstract {
                 SET_ERRINFO(ErrorType::INVALID_BOOL, "BOOLEAN");
             }
         } else if (type == "any") {
-            return tokens[pos++].value;
+            const int initialPos = pos;
+            for (size_t i = pos; i < tokens.size(); i++) {
+                if (tokens[i].value == ";") {
+                    const std::vector<Token> temp(tokens.begin() + initialPos, tokens.begin() + static_cast<int>(i));
+                    auto rdp = RecursiveDescentParser(temp, symbolTable);
+                    std::string res = rdp.parse();
+                    return res;
+                }
+            }
         }
         return "";
     }
@@ -673,20 +814,21 @@ namespace abstract {
         return "";
     }
 
-    inline std::tuple<std::string, std::string, std::optional<std::string>> _parg(int &pos, const std::vector<Token> &tokens, const std::vector<std::string>& types) {
+    inline std::tuple<std::string, std::string, std::optional<std::string>> _parg(int &pos, const std::vector<Token> &tokens, const std::vector<std::string>& types, const std::vector<Token> &unfilteredTokens,
+        std::unordered_map<std::string, SymbolInfo>& symbolTable) {
         std::string name = ascii::_aname(pos, tokens);
         symbol::_pcolon(pos, tokens);
         std::string type = _isType(tokens[pos].value, types, pos, tokens);
         if (tokens[pos].value == "=") {
             symbol::_peq(pos, tokens);
-            std::string value = _value(pos, tokens, type);
+            std::string value = _value(pos, tokens, type, unfilteredTokens, symbolTable);
             return {name, type, value};
         }
         return {name, type, std::nullopt};
     }
 
     inline void _pparams(int &pos, const std::vector<Token> &tokens,
-        const std::vector<std::string>& types, const std::string& parentFunction, std::unordered_map<std::string, SymbolInfo>& symbolTable) {
+        const std::vector<std::string>& types, const std::string& parentFunction, std::unordered_map<std::string, SymbolInfo>& symbolTable, const std::vector<Token> &unfilteredTokens) {
 
         symbol::_popen(pos, tokens);
         if (tokens[pos].value == ")") {
@@ -695,7 +837,7 @@ namespace abstract {
             return;
         }
         // Attempt to match an argument.
-        auto [name, type, value] = _parg(pos, tokens, types);
+        auto [name, type, value] = _parg(pos, tokens, types, unfilteredTokens, symbolTable);
 
         std::get<Function>(symbolTable[parentFunction]).parameters.push_back(type);
         std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("None")});
@@ -708,7 +850,7 @@ namespace abstract {
                 symbol::_pcomma(pos, tokens);
 
                 // Then, match another argument.
-                auto [name, type, value] = _parg(pos, tokens, types);
+                auto [name, type, value] = _parg(pos, tokens, types, unfilteredTokens, symbolTable);
                 std::get<Function>(symbolTable[parentFunction]).parameters.push_back(type);
                 std::get<Function>(symbolTable[parentFunction]).localVariables.push_back(Variable{name, type, value.value_or("None")});
 
@@ -721,8 +863,9 @@ namespace abstract {
         symbol::_pclose(pos, tokens);
     }
 
-    inline Variable _pcall_arg(int &pos, const std::vector<Token> &tokens, const std::unordered_map<std::string, SymbolInfo>& symbolTable) {
-        if (const auto [val, func] = combinators::_ror<ascii::noErr::_aname, ascii::noErr::_adigit>(pos, tokens); func == ascii::noErr::_aname) {
+    inline Variable _pcall_arg(int &pos, const std::vector<Token> &tokens, const std::unordered_map<std::string, SymbolInfo>& symbolTable, const std::vector<Token> &unfilteredTokens) {
+        int initialPos = pos;
+        if (auto [val, func] = combinators::_ror<ascii::noErr::_aname, ascii::noErr::_adigit, ascii::noErr::_pstring>(pos, tokens); func == ascii::noErr::_aname) {
             try {
                 return std::get<Variable>(symbolTable.at(val));
             } catch (const std::out_of_range& e) {
@@ -732,13 +875,16 @@ namespace abstract {
             }
         } else if (func == ascii::noErr::_adigit) {
             return Variable{"", "int", val, ""};
+        } else if (func == ascii::noErr::_pstring) {
+            val = ascii::_pstring(initialPos, unfilteredTokens);
+            return Variable{"", "string", val, ""};
         }
         SET_ERRINFO(ErrorType::EXPECTED_IDENTIFIER, "VALID IDENTIFIER");
         return Variable{"", "", "", ""};
     }
 
     // create another _pparams version that returns a vector of strings of the values of the parameters
-    inline std::vector<Variable> _pcall_params(int &pos, const std::vector<Token> &tokens, const std::unordered_map<std::string, SymbolInfo>& symbolTable) {
+    inline std::vector<Variable> _pcall_params(int &pos, const std::vector<Token> &tokens, const std::unordered_map<std::string, SymbolInfo>& symbolTable, const std::vector<Token> &unfilteredTokens) {
         symbol::_popen(pos, tokens);
         std::vector<Variable> arguments;
         if (tokens[pos].value == ")") {
@@ -746,7 +892,7 @@ namespace abstract {
             return arguments;
         }
         // Attempt to match an argument.
-        const Variable value = _pcall_arg(pos, tokens, symbolTable);
+        const Variable value = _pcall_arg(pos, tokens, symbolTable, unfilteredTokens);
 
         arguments.push_back(value);
 
@@ -758,7 +904,7 @@ namespace abstract {
                 symbol::_pcomma(pos, tokens);
 
                 // Then, match another argument.
-                const Variable value = _pcall_arg(pos, tokens, symbolTable);
+                const Variable value = _pcall_arg(pos, tokens, symbolTable, unfilteredTokens);
                 arguments.push_back(value);
             } else {
                 // If the comma symbol is not found, then break the loop.

@@ -1,0 +1,2 @@
+merge stdlib@"io" as std;
+merge "moduletest.cv" as test;

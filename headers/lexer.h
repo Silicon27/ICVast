@@ -50,18 +50,20 @@ public:
                           });
     }
 
-    std::tuple<std::vector<Token>, std::map<int, std::string>> tokenize() {
+    std::tuple<std::vector<Token>, std::vector<Token>, std::map<int, std::string>> tokenize() {
         std::vector<Token> tokens;
         std::string line;
 
         while (std::getline(input, line)) {
             currentLine = line;
             currentPos = 0;
+            spaces = "";
 
             while (currentPos < currentLine.size()) {
                 const char currentChar = currentLine[currentPos];
 
                 if (std::isspace(currentChar)) {
+                    spaces += currentChar;
                     ++currentPos;
                     continue;
                 }
@@ -82,6 +84,7 @@ public:
                 }
 
                 tokens.push_back({TokenType::UNKNOWN, std::string(1, currentChar), lineNumber, static_cast<int>(currentPos + 1)});
+                unfilteredTokens.push_back({TokenType::UNKNOWN, std::string(1, currentChar) + spaces, lineNumber, static_cast<int>(currentPos + 1)});
                 ++currentPos;
             }
             this->unfilteredLines[lineNumber] = line;
@@ -89,7 +92,8 @@ public:
         }
 
         tokens.push_back({TokenType::eof, "", lineNumber, 0});
-        return {tokens, this->unfilteredLines};
+        unfilteredTokens.push_back({TokenType::eof, "", lineNumber, 0});
+        return {tokens, unfilteredTokens, this->unfilteredLines};
     }
 
 private:
@@ -99,46 +103,52 @@ private:
     int lineNumber;
     std::map<int, std::string> unfilteredLines;
     std::vector<std::string> symbols;
+    std::string spaces;
+    std::vector<Token> unfilteredTokens;
 
     Token tokenizeNumber() {
-        const int column = currentPos + 1;
+        const int column = static_cast<int>(currentPos) + 1;
         std::string number;
         while (currentPos < currentLine.size() && std::isdigit(currentLine[currentPos])) {
             number.push_back(currentLine[currentPos]);
             ++currentPos;
         }
+        unfilteredTokens.push_back({TokenType::NUMBER, spaces + number, lineNumber, column});
+        spaces.clear();
         return {TokenType::NUMBER, number, lineNumber, column};
     }
 
     Token tokenizeIdentifier() {
-        const int column = currentPos + 1;
+        const int column = static_cast<int>(currentPos) + 1;
         std::string ident;
         while (currentPos < currentLine.size() &&
                (std::isalnum(currentLine[currentPos]) || currentLine[currentPos] == '_')) {
             ident.push_back(currentLine[currentPos]);
             ++currentPos;
         }
-        return {
-            isKeyword(ident) ? TokenType::KEYWORD : TokenType::IDENTIFIER,
-            ident,
-            lineNumber,
-            column
-        };
+        const TokenType type = isKeyword(ident) ? TokenType::KEYWORD : TokenType::IDENTIFIER;
+        unfilteredTokens.push_back({type, spaces + ident, lineNumber, column});
+        spaces.clear();
+        return {type, ident, lineNumber, column};
     }
 
     Token tokenizeSymbol() {
-        const int column = currentPos + 1;
+        const int column = static_cast<int>(currentPos) + 1;
         for (const auto &sym : symbols) {
             const std::size_t len = sym.size();
             if (currentPos + len <= currentLine.size() &&
                 currentLine.substr(currentPos, len) == sym) {
                 currentPos += len;
+                unfilteredTokens.push_back({TokenType::SYMBOL, spaces + sym, lineNumber, column});
+                spaces.clear();
                 return {TokenType::SYMBOL, sym, lineNumber, column};
             }
         }
 
         const char unknownChar = currentLine[currentPos];
         ++currentPos;
+        unfilteredTokens.push_back({TokenType::UNKNOWN, spaces + std::string(1, unknownChar), lineNumber, column});
+        spaces.clear();
         return {TokenType::UNKNOWN, std::string(1, unknownChar), lineNumber, column};
     }
 

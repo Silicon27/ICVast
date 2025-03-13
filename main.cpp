@@ -14,6 +14,10 @@
 #include <unordered_map>
 #include <cstdlib>
 #include <ranges>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -28,6 +32,7 @@
 
 #define PARGS (pos, *tokens);
 
+#include "headers/errh.h"
 #include "headers/lexer.h"
 #include "headers/parser.h"
 
@@ -87,13 +92,13 @@ int main(const int argc, char* argv[])
 
     auto lex = Lexer(file);
 
-    auto [tokenizedOutput, unfilteredLines] = lex.tokenize();
+    auto [tokenizedOutput, unfilteredTokens, unfilteredLines] = lex.tokenize();
 
     // printTree(tokenizedOutput);
 
     set_unfilteredLines(unfilteredLines);
 
-    Parser parser(std::make_unique<std::vector<Token>>(tokenizedOutput), input);
+    Parser parser(std::make_unique<std::vector<Token>>(tokenizedOutput), std::make_unique<std::vector<Token>>(unfilteredTokens), input);
     parser.parse();
     return 0;
 }

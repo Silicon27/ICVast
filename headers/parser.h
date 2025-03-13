@@ -23,6 +23,7 @@ inline std::vector<std::string> split(const std::string &str, const char delimit
 class Parser {
 private:
     std::unique_ptr<std::vector<Token>> tokens; // Change to unique_ptr
+    std::unique_ptr<std::vector<Token>> unfilteredTokens;
     int currentToken;
     std::unordered_map<std::string, SymbolInfo> globalSymbolTable;
     std::string scope;
@@ -30,14 +31,14 @@ private:
     std::string filePath;
 
 public:
-    explicit Parser(std::unique_ptr<std::vector<Token>> tokens, const std::string& filePath, std::string scope = "global")
-        : tokens(std::move(tokens)), currentToken(0), scope(std::move(scope)), filePath(filePath)
+    explicit Parser(std::unique_ptr<std::vector<Token>> tokens, std::unique_ptr<std::vector<Token>> unfilteredTokens, const std::string& filePath, std::string scope = "global")
+        : tokens(std::move(tokens)), unfilteredTokens(std::move(unfilteredTokens)), currentToken(0), scope(std::move(scope)), filePath(filePath)
     {
         set_filePath(filePath);
     }
 
     // This would mean to ignore function internals until used
-    static std::vector<Token> getScope(int& pos, const std::vector<Token> &tokens) {
+    static std::tuple<std::vector<Token>, std::vector<Token>> getScope(int& pos, const std::vector<Token> &tokens, const std::vector<Token> &unfilteredTokens) {
         int amount = 0;
         SEGFAULTErrContext ctx = {unfilteredLines[tokens[pos].line].c_str(), tokens[pos].line, tokens[pos].column};
         const int initialPos = pos;
@@ -55,7 +56,7 @@ public:
             ++pos;
         } while (amount != 0);
         pos--;
-        return {tokens.begin() + initialPos + 1, tokens.begin() + (pos-1)};
+        return {{tokens.begin() + initialPos + 1, tokens.begin() + (pos-1)}, {unfilteredTokens.begin() + initialPos + 1, unfilteredTokens.begin() + (pos-1)}};
     }
 
     void parseFunction(int& pos) {
@@ -65,15 +66,16 @@ public:
 
         globalSymbolTable[name] = Function(name); // Instantiating a new function object (_pparams require pre-existing function instance to add too it)
 
-        abstract::_pparams(pos, *tokens, types, name, globalSymbolTable); // Parameters
+        abstract::_pparams(pos, *tokens, types, name, globalSymbolTable, *unfilteredTokens); // Parameters
 
         symbol::_parrow PARGS // ->
         const std::string returnType = abstract::_isType((*tokens)[pos].value, types, pos, *tokens); // Return type
 
-        const std::vector<Token> body = getScope PARGS // Function body
+        auto [body, unfilteredBody] = getScope (pos, *tokens, *unfilteredTokens); // Function body
 
         std::get<Function>(globalSymbolTable[name]).returnType = returnType;
         std::get<Function>(globalSymbolTable[name]).body = body;
+        std::get<Function>(globalSymbolTable[name]).unfilteredBody = unfilteredBody;
         std::get<Function>(globalSymbolTable[name]).scopeLevel = this->scope;
     }
 
@@ -84,7 +86,7 @@ public:
         symbol::_pcolon PARGS // :
         const std::string type = abstract::_isType((*tokens)[pos].value, types, pos, *tokens); // Type
         symbol::_peq PARGS // =
-        const std::string value = abstract::_value(pos, *tokens, type); // Value
+        const std::string value = abstract::_value(pos, *tokens, type, *unfilteredTokens, globalSymbolTable); // Value
 
         globalSymbolTable[name] = Variable(name, type, value, this->scope);
     }
@@ -102,7 +104,7 @@ public:
 
             std::ifstream file(moduleLoc);
             Lexer lexer(file);
-            auto [moduleTokens, moduleUnfilteredLines] = lexer.tokenize();
+            auto [moduleTokens, moduleUnfiltered, moduleUnfilteredLines] = lexer.tokenize();
 
             // Save the original unfiltered lines and set the new ones
             auto originalUnfilteredLines = unfilteredLines;
@@ -111,7 +113,7 @@ public:
             std::string originalFilePath = filePath;
             set_filePath(moduleLoc);
 
-            Parser parser(std::make_unique<std::vector<Token>>(moduleTokens), moduleLoc, alias);
+            Parser parser(std::make_unique<std::vector<Token>>(moduleTokens), std::make_unique<std::vector<Token>>(moduleUnfiltered), moduleLoc, alias);
             parser.parse();
 
             // Restore the original unfiltered lines
@@ -155,7 +157,7 @@ public:
 
             std::ifstream file(fullPath);
             Lexer lexer(file);
-            auto [moduleTokens, moduleUnfilteredLines] = lexer.tokenize();
+            auto [moduleTokens, moduleUnfiltered, moduleUnfilteredLines] = lexer.tokenize();
 
             // Save the original unfiltered lines and set the new ones
             auto originalUnfilteredLines = unfilteredLines;
@@ -164,7 +166,7 @@ public:
             std::string originalFilePath = filePath;
             set_filePath(fullPath);
 
-            Parser parser(std::make_unique<std::vector<Token>>(moduleTokens), fullPath, alias);
+            Parser parser(std::make_unique<std::vector<Token>>(moduleTokens), std::make_unique<std::vector<Token>>(moduleUnfiltered), fullPath, alias);
             parser.parse();
 
             // Restore the original unfiltered lines
@@ -199,10 +201,19 @@ public:
         }
     }
 
+    void parseReturn(int &pos) {
+        std::cout << "Parsing return" << std::endl;
+        keyword::_preturn PARGS // return
+    }
+
+    // ========================================================================================================
+    //                                              Helper functions
+    // ========================================================================================================
+
     void parseFunctionCall(int &pos) {
         std::cout << "Parsing function call" << std::endl;
         const std::string name = ascii::_aname PARGS // Function name
-        const std::vector<Variable> arguments = abstract::_pcall_params(pos, *tokens, globalSymbolTable);
+        const std::vector<Variable> arguments = abstract::_pcall_params(pos, *tokens, globalSymbolTable, *unfilteredTokens);
         std::cout << "Function call to " << name << " with arguments: ";
         for (const auto &arg : arguments) {
             std::cout << arg.value << " ";
@@ -223,14 +234,14 @@ public:
             localSymbolTable[arg.identifier] = arg;
         }
 
-        Parser parser(std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).body), filePath, name);
+        Parser parser(std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).body), std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).unfilteredBody), filePath, name);
         parser.set_globalSymbolTable(localSymbolTable);
         parser.parse();
     }
 
     void parseScopedFunctionCall(int &pos, const Function& func) {
         const std::string name = ascii::_aname PARGS // Function name
-        const std::vector<Variable> arguments = abstract::_pcall_params(pos, *tokens, globalSymbolTable);
+        const std::vector<Variable> arguments = abstract::_pcall_params(pos, *tokens, globalSymbolTable, *unfilteredTokens);
 
         // Validate function call parameter types
         for (size_t i = 0; i < arguments.size(); i++) {
@@ -245,14 +256,15 @@ public:
             localSymbolTable[func.localVariables[i].identifier] = arguments[i];
         }
 
-        Parser parser(std::make_unique<std::vector<Token>>(func.body), filePath, name);
+        Parser parser(std::make_unique<std::vector<Token>>(func.body), std::make_unique<std::vector<Token>>(func.unfilteredBody), filePath, name);
         parser.set_globalSymbolTable(localSymbolTable);
         parser.parse();
     }
 
     void scope_resolve(int &pos) {
-        std::variant<Variable, Function> result = abstract::_pscope_resolve(pos, *tokens, globalSymbolTable);
-        if (std::holds_alternative<Variable>(result)) {
+        if (const std::variant<Variable, Function> result = abstract::_pscope_resolve(pos, *tokens, globalSymbolTable);
+            std::holds_alternative<Variable>(result)) {
+
             std::cout << "Variable found" << std::endl;
         } else if (std::holds_alternative<Function>(result)) {
             parseScopedFunctionCall(pos, std::get<Function>(result));
@@ -270,6 +282,9 @@ public:
                     parseMerge(currentToken);
                 else if ((*tokens)[currentToken].value == "extern")
                     parseExtern(currentToken);
+                else if ((*tokens)[currentToken].value == "return") {
+
+                }
             }
 
             if ((*tokens)[currentToken].type == TokenType::IDENTIFIER) {

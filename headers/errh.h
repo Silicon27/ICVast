@@ -79,6 +79,7 @@ enum class ErrorType {
     STACK_OVERFLOW = 3011,
     INVALID_BOOL = 3012,
     INVALID_TYPE_CAST = 3013,
+    INVALID_NUMBER = 3014,
 
     // File system errors (4000-4002)
     FILE_NOT_FOUND = 4000,
@@ -162,6 +163,7 @@ namespace error {
             case ErrorType::STACK_OVERFLOW:                message = "Stack overflow error"; break;
             case ErrorType::INVALID_BOOL:                  message = "Invalid boolean error"; break;
             case ErrorType::INVALID_TYPE_CAST:             message = "Invalid type cast error"; break;
+            case ErrorType::INVALID_NUMBER:                message = "Invalid number error"; break;
 
             case ErrorType::FILE_NOT_FOUND:                message = "File not found error"; break;
             case ErrorType::PERMISSION_DENIED:             message = "Permission denied error"; break;
