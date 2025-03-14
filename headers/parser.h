@@ -56,7 +56,20 @@ public:
             ++pos;
         } while (amount != 0);
         pos--;
-        return {{tokens.begin() + initialPos + 1, tokens.begin() + (pos-1)}, {unfilteredTokens.begin() + initialPos + 1, unfilteredTokens.begin() + (pos-1)}};
+        return {{tokens.begin() + initialPos + 1, tokens.begin() + pos}, {unfilteredTokens.begin() + initialPos + 1, unfilteredTokens.begin() + pos}};
+    }
+
+    static void setPos2ScopeEnd(int &pos, const std::vector<Token> &tokens) {
+        int amount = 0;
+        const int initialPos = pos;
+        do {
+            if (tokens[pos].value == "{") {
+                ++amount;
+            } else if (tokens[pos].value == "}") {
+                --amount;
+            }
+            ++pos;
+        } while (amount != 0);
     }
 
     void parseFunction(int& pos) {
@@ -206,6 +219,80 @@ public:
         keyword::_preturn PARGS // return
     }
 
+    void parseElseIf(int &pos) {
+        std::cout << "Parsing else if" << std::endl;
+        pos--;
+        parseIf(pos);
+    }
+
+    void parseIf(int &pos) {
+        std::cout << "Parsing if" << std::endl;
+        keyword::_pif PARGS // if
+        symbol::_popen PARGS // (
+
+        // Use ConditionParser for the condition
+        std::vector<Token> conditionTokens;
+        while (pos < tokens->size() && (*tokens)[pos].value != ")") {
+            conditionTokens.push_back((*tokens)[pos++]);
+        }
+
+        ConditionParser conditionParser(conditionTokens, globalSymbolTable);
+        const bool conditionResult = conditionParser.evaluate();
+
+        symbol::_pclose PARGS // )
+
+        if (conditionResult) {
+            // Parse then-block
+            auto [body, unfilteredBody] = getScope(pos, *tokens, *unfilteredTokens);
+            Parser bodyParser(std::make_unique<std::vector<Token>>(body),
+                             std::make_unique<std::vector<Token>>(unfilteredBody),
+                             filePath, scope);
+            bodyParser.set_globalSymbolTable(globalSymbolTable);
+            bodyParser.parse();
+            symbol::_pcurly_close PARGS // }
+            // Skip else and else if blocks if present
+            while ((*tokens)[pos].value != "else" || (*tokens)[pos + 1].value != "if") {
+                if ((*tokens)[pos].value == "else" && (*tokens)[pos + 1].value == "if") {
+                    keyword::_pelse PARGS // else
+                    keyword::_pif PARGS // if
+                    // there are conditions to check within the () so parse it but still skip the block
+                    setPos2ScopeEnd(pos, *tokens);
+                } else if ((*tokens)[pos].value == "else") {
+                    keyword::_pelse PARGS // else
+                    setPos2ScopeEnd(pos, *tokens);
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Skip else block if present
+            setPos2ScopeEnd(pos, *tokens);
+        }
+
+        try {
+            keyword::noErr::_pelse PARGS
+            keyword::noErr::_pif PARGS // if
+            parseElseIf(pos);
+        } catch (const std::runtime_error& e) {}
+
+        try {
+            keyword::noErr::_pelse PARGS
+            if (!conditionResult) {
+                // Parse else-block
+                auto [body, unfilteredBody] = getScope(pos, *tokens, *unfilteredTokens);
+                Parser bodyParser(std::make_unique<std::vector<Token>>(body),
+                                 std::make_unique<std::vector<Token>>(unfilteredBody),
+                                 filePath, scope);
+                bodyParser.set_globalSymbolTable(globalSymbolTable);
+                bodyParser.parse();
+            } else {
+                // Skip then block if present
+                setPos2ScopeEnd(pos, *tokens);
+            }
+        } catch (const std::runtime_error& e) {}
+        pos--;
+    }
+
     // ========================================================================================================
     //                                              Helper functions
     // ========================================================================================================
@@ -283,8 +370,8 @@ public:
                     parseMerge(currentToken);
                 else if ((*tokens)[currentToken].value == "extern")
                     parseExtern(currentToken);
-                else if ((*tokens)[currentToken].value == "return") {
-
+                else if ((*tokens)[currentToken].value == "if") {
+                    parseIf(currentToken);
                 }
             }
 

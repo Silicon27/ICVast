@@ -107,8 +107,7 @@ private:
             currentToken++;
             return result;
         } else if (symbolTable.contains(input[currentToken].value)) {
-            SymbolInfo info = symbolTable[input[currentToken].value];
-            if (std::holds_alternative<Variable>(info)) {
+            if (SymbolInfo info = symbolTable[input[currentToken].value]; std::holds_alternative<Variable>(info)) {
                 auto var = std::get<Variable>(info);
                 currentToken++;
                 return std::stod(var.value);
@@ -136,22 +135,129 @@ public:
 
             const double result = expr();
 
-            // Check if we've consumed all tokens except EOF
-            if (currentToken < input.size() - 1 ||
-               (currentToken < input.size() && input[currentToken].type != TokenType::eof)) {
-                Token extra = input[currentToken];
-                throw std::runtime_error("Unexpected token '" + extra.value +
-                    "' at line " + std::to_string(extra.line) +
-                    ":" + std::to_string(extra.column));
-            }
+            // Check if we've consumed all tokens except last token in input
+            // if (currentToken < input.size() - 1 ||
+            //    (currentToken < input.size() && input[currentToken].type != TokenType::eof)) {
+            //     Token extra = input[currentToken];
+            //     throw std::runtime_error("Unexpected token '" + extra.value +
+            //         "' at line " + std::to_string(extra.line) +
+            //         ":" + std::to_string(extra.column));
+            // }
 
             return std::to_string(result);
         } catch (const std::exception& e) {
             return "Error: " + std::string(e.what());
         }
     }
+
+    [[nodiscard]] int getCurrentPosition() const { return static_cast<int>(currentToken); }
 };
 
+
+class ConditionParser {
+private:
+    size_t currentToken;
+    const std::vector<Token>& input;
+    const std::unordered_map<std::string, SymbolInfo>& symbolTable;
+
+    // Entry point for condition parsing
+    double parseCondition() {
+        return parseLogicalOr();
+    }
+
+    double parseLogicalOr() {
+        double result = parseLogicalAnd();
+        while (currentToken < input.size() && input[currentToken].value == "||") {
+            currentToken++;
+            const double rhs = parseLogicalAnd();
+            result = (result != 0.0 || rhs != 0.0) ? 1.0 : 0.0;
+        }
+        return result;
+    }
+
+    double parseLogicalAnd() {
+        double result = parseEquality();
+        while (currentToken < input.size() && input[currentToken].value == "&&") {
+            currentToken++;
+            double rhs = parseEquality();
+            result = (result != 0.0 && rhs != 0.0) ? 1.0 : 0.0;
+        }
+        return result;
+    }
+
+    double parseEquality() {
+        double result = parseRelational();
+        while (currentToken < input.size() &&
+              (input[currentToken].value == "==" || input[currentToken].value == "!=")) {
+
+            std::string op = input[currentToken].value;
+            currentToken++;
+            double rhs = parseRelational();
+
+            if (op == "==") result = (result == rhs) ? 1.0 : 0.0;
+            else result = (result != rhs) ? 1.0 : 0.0;
+        }
+        return result;
+    }
+
+    double parseRelational() {
+        double result = parseExpression();
+        while (currentToken < input.size() &&
+              (input[currentToken].value == "<" || input[currentToken].value == ">" ||
+               input[currentToken].value == "<=" || input[currentToken].value == ">=")) {
+
+            std::string op = input[currentToken].value;
+            currentToken++;
+            const double rhs = parseExpression();
+
+            if (op == "<") result = (result < rhs) ? 1.0 : 0.0;
+            else if (op == ">") result = (result > rhs) ? 1.0 : 0.0;
+            else if (op == "<=") result = (result <= rhs) ? 1.0 : 0.0;
+            else if (op == ">=") result = (result >= rhs) ? 1.0 : 0.0;
+        }
+        return result;
+    }
+
+    double parseExpression() {
+        // Reuse existing expression parser for arithmetic
+        RecursiveDescentParser exprParser(
+            std::vector<Token>(input.begin() + static_cast<long int>(currentToken), input.end()),
+            symbolTable
+        );
+        double result = std::stod(exprParser.parse());
+        currentToken += exprParser.getCurrentPosition();
+        return result;
+    }
+
+public:
+    ConditionParser(const std::vector<Token>& tokens,
+                   const std::unordered_map<std::string, SymbolInfo>& symbols)
+        : currentToken(0), input(tokens), symbolTable(symbols) {}
+
+    bool evaluate() {
+        try {
+            const double result = parseCondition();
+
+            if (currentToken < input.size() && input[currentToken].type != TokenType::eof) {
+                Token extra = input[currentToken];
+                throw std::runtime_error("Unexpected token '" + extra.value +
+                    "' at line " + std::to_string(extra.line) +
+                    ":" + std::to_string(extra.column));
+            }
+
+            return result != 0.0;
+        } catch (const std::exception& e) {
+            // Use existing error handling infrastructure
+            errInfo = { ErrorType::INVALID_BOOL, input[currentToken].line,
+                        input[currentToken].column, unfilteredLines[input[currentToken].line],
+                        "Valid condition", currfilePath };
+            error::gen(errInfo);
+            return false;
+        }
+    }
+
+    [[nodiscard]] size_t getCurrentPosition() const { return currentToken; }
+};
 
 
 namespace keyword {
@@ -162,6 +268,22 @@ namespace keyword {
                 return "stdlib";
             }
             throw std::runtime_error("Expected keyword 'stdlib'");
+        }
+
+        inline void _pif(int &pos, const std::vector<Token> &tokens) {
+            if (tokens[pos].value == "if") {
+                ++pos;
+                return;
+            }
+            throw std::runtime_error("Expected keyword 'if'");
+        }
+
+        inline void _pelse(int &pos, const std::vector<Token> &tokens) {
+            if (tokens[pos].value == "else") {
+                ++pos;
+                return;
+            }
+            throw std::runtime_error("Expected keyword 'else'");
         }
     }
 
