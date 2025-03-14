@@ -1,5 +1,7 @@
 merge stdlib@"io" as std;
-var y : int = 2;
-var x : any = y*y;
 
-std::print(x);
+fn print(s: any) -> void {
+    std::print(s);
+}
+var x : string = "Hello, world!";
+print("Hello, world!");

@@ -230,8 +230,9 @@ public:
 
         // create a copy of the global symbol table and add the function arguments to it
         std::unordered_map<std::string, SymbolInfo> localSymbolTable = globalSymbolTable;
-        for (const auto &arg : arguments) {
-            localSymbolTable[arg.identifier] = arg;
+
+        for (size_t i = 0; i < arguments.size(); i++) {
+            localSymbolTable[std::get<Function>(globalSymbolTable[name]).localVariables[i].identifier] = arguments[i];
         }
 
         Parser parser(std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).body), std::make_unique<std::vector<Token>>(std::get<Function>(globalSymbolTable[name]).unfilteredBody), filePath, name);
