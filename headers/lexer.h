@@ -1,12 +1,5 @@
 #pragma once
 
-#include <sstream>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cctype>
-#include <unordered_set>
-
 enum class TokenType {
     KEYWORD,
     SYMBOL,

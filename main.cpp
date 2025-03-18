@@ -18,6 +18,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <set>
+#include <memory>
+#include <sstream>
+#include <cctype>
+#include <unordered_set>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -34,6 +39,7 @@
 
 #include "headers/errh.h"
 #include "headers/lexer.h"
+#include "headers/parsers.h"
 #include "headers/parser.h"
 
 void printTree(const std::vector<Token>& tokenizedList)
